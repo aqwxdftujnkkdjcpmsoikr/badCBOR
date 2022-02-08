@@ -4,9 +4,7 @@
 struct charStack {
     char * string;
     int stringLen;
-    char * ending;
-    int endingLen;
-    int instances;
+    char isEnd;
     void * next;
 };
 
@@ -16,72 +14,31 @@ struct str {
     char isEnd;
 };
 
-char * pop(struct charStack **s) {
-    char *temp1 = (*s)->string;
-    // int temp2 = s->instances;
-    struct charStack * stemp = (*s)->next;
-    free((*s));
-    *s = stemp;
-    return temp1;
-}
-
 void deStack(struct charStack **s) {
     struct charStack * stemp = (*s)->next;
-    free((*s));
+    if (*s != stemp) free((*s));// explicitly allow 'infinite' stacks
     *s = stemp;
     return;
 }
 
-void add(struct charStack **s, char *newLoad, int newLoadLen, char* newEnd, int newEndLen, int newInstances) {
+void add(struct charStack **s, char *newLoad, int newLoadLen, char isEnd) {
     struct charStack * newHead = malloc(sizeof(struct charStack));
     newHead->string=newLoad;
     newHead->stringLen=newLoadLen;
-    newHead->ending=newEnd;
-    newHead->endingLen=newEndLen;
-    newHead->instances=newInstances;
+    newHead->isEnd=isEnd;
     newHead->next=&(**s);
     *s= newHead;
     return;
 }
 
 struct str * consume(struct charStack **s) {
-    --((*s)->instances);
     struct str * ret = malloc(sizeof(struct str));
-    if((*s)->instances == 0) { // intentional : -1 instances causes 'infinite' possible uses
-        ret->content=(*s)->ending;
-        ret->length=(*s)->endingLen;
-        ret->isEnd=1;
-        deStack(s);
-    }
-    else {
-        ret->content=(*s)->string;
-        ret->length=(*s)->stringLen;
-        ret->isEnd=0;
-    }
-
+    ret->content=(*s)->string;
+    ret->length=(*s)->stringLen;
+    ret->isEnd=(*s)->isEnd;
+    deStack(s);
     return ret;
 }
-
-struct intStack {
-    int val;
-    void * next;
-};
-
-void stack(struct intStack **s, int newVal) {
-    struct intStack * newHead = malloc(sizeof(struct intStack));
-    newHead->val=newVal;
-    newHead->next=&(**s);
-    *s = newHead;
-    return;
-}
-void deStackInt(struct intStack **s) {
-    struct intStack * stemp = (*s)->next;
-    free((*s));
-    *s = stemp;
-    return;
-}
-
-
 
 
 
@@ -125,7 +82,7 @@ unsigned char * inToBin(char * input, int len) {
     return datastream;
 }
 
-char * bin(unsigned char in) {
+char * bin(unsigned char in) {// DEBUG
     // printf("[bin] : %c\n", in);
     static char r[9];
     int c=0;
@@ -178,18 +135,18 @@ char * binToCBOR_S2S(unsigned char * inStream, int streamLen) {
         int realLen=len;
         if (type <2) {
             if (len<24) {
-                printf("    [bintoCBOR] short int\n");
+                // printf("    [bintoCBOR] short int\n");
                 realLen = (len<10) ? 1 : 2;
             }
             else {
-                printf("    [bintoCBOR] long int\n");
+                // printf("    [bintoCBOR] long int\n");
                 realLen=intLen(len, inStream, byteInd);// inefficient but tight
                 byteInd+=(1<<(len-24));
             }
         }
         else if(type>1 && len>24) {// only for not integers
             // then read next bytes for the real length
-            printf("    [bintoCBOR] long length for complex type\n");
+            // printf("    [bintoCBOR] long length for complex type\n");
             int bylenOfLen = len-23;
             realLen=0;
             for(int foo=0; foo< bylenOfLen; ++foo) {
@@ -229,13 +186,14 @@ char * binToCBOR_S2S(unsigned char * inStream, int streamLen) {
     int cursor = 0;
     // INIT CHAR STACK
     struct charStack *myCharStack = malloc(sizeof(struct charStack));
-    myCharStack->string = "";
-    myCharStack->stringLen = 0;
-    myCharStack->instances = (int) -1;
+    myCharStack->string = " ";
+    myCharStack->stringLen = 1;
+    myCharStack->isEnd = 0;
+    myCharStack->next = myCharStack;
     // INIT SCOPE MAP LEN STACK
-    struct intStack *myMapLenStack = malloc(sizeof(struct intStack));
-    myMapLenStack->val=0;
-    myMapLenStack->next=myMapLenStack;
+    // struct intStack *myMapLenStack = malloc(sizeof(struct intStack));
+    // myMapLenStack->val=0;
+    // myMapLenStack->next=myMapLenStack;
 
     printf("  [writing cbor string]\n");
     for(int byteInd=0; byteInd<streamLen; ++byteInd) {
@@ -260,23 +218,6 @@ char * binToCBOR_S2S(unsigned char * inStream, int streamLen) {
                 }
                 realLen = (realLen<<8)+inStream[byteInd];
             }
-        }
-
-
-        if((myMapLenStack->val)>0) {
-            printf("    currently in map :");
-            --(myMapLenStack->val);
-            if ((myMapLenStack->val)&1) {
-                add(&myCharStack, " : ", 3, "", 0, 2); // saves introducing an artificial couple type
-                printf("key (%d)", (myMapLenStack->val));
-            }
-            else {
-                printf("val (%d)", (myMapLenStack->val));
-            }
-            printf("\n");
-        }
-        if ((myMapLenStack->val)==0) {
-            deStackInt(&myMapLenStack);
         }
 
         printf("    reading byte %d, type %d (%d)\n", byteInd, type, len);
@@ -332,7 +273,10 @@ char * binToCBOR_S2S(unsigned char * inStream, int streamLen) {
             printf("    writing string of length %d\n", realLen);
             printf("      inserting start delimiter '\"'\n");
             ret[cursor]='"';++cursor;
-            add(&myCharStack, "", 0, "\"", 1, realLen);
+            add(&myCharStack,"\"",1,1);
+            for(int foo=0;foo<realLen;++foo) {
+              add(&myCharStack,"",0,0);
+            }
             ++byteInd;
             int ind;
             for(ind=byteInd;ind<byteInd+realLen;++ind) {
@@ -351,19 +295,23 @@ char * binToCBOR_S2S(unsigned char * inStream, int streamLen) {
         else if(type == 4) {
             printf("    writing array of length %d\n", realLen);
             printf("      inserting start delimiter\n");
-            for(int i=0;i<realLen;++i) {
-                stack(&myMapLenStack, 0);
+            add(&myCharStack,"]",1,1);
+            for(int foo=1;foo<realLen;++foo) {
+              add(&myCharStack,", ",2,0);
             }
             ret[cursor]='[';++cursor;
-            add(&myCharStack, ", ", 2, "]", 1, realLen);
             continue;
         }
         else if(type == 5) {
             printf("    writing map of length %d\n", realLen);
-            stack(&myMapLenStack, realLen*2);
             printf("      inserting start delimiter\n");
             ret[cursor]='{';++cursor;
-            add(&myCharStack, ", ", 2, "}", 1, realLen);
+            add(&myCharStack,"}",1,1);
+            add(&myCharStack," : ",3,0);
+            for(int foo=1;foo<realLen;++foo) {
+                add(&myCharStack,", ",2,0);
+                add(&myCharStack," : ",3,0);
+            }
             continue;
         }
         else if(type == 6) {
@@ -378,10 +326,13 @@ char * binToCBOR_S2S(unsigned char * inStream, int streamLen) {
             ret[cursor]=(insert->content)[foo];
             ++cursor;
         }
-        while (insert->isEnd && cursor<estLen) {
+        char MAX_REC=7;char rec=0;
+        while (insert->isEnd && cursor<estLen && rec<MAX_REC) {
+            ++rec;
+            printf("  collapsing endings (normal)\n");
             insert = consume(&myCharStack);
+            printf("    inserting spacer/end '%s' (len:%d)\n", insert->content, insert->length);
             for(int foo=0;foo<(insert->length) && cursor<estLen;++foo) {
-                printf("  inserting spacer/end '%c' (len:%d)\n", insert->content[foo], insert->length);
                 ret[cursor]=(insert->content)[foo];
                 ++cursor;
             }
@@ -400,15 +351,13 @@ void foo() {
     struct charStack * myCharStack = malloc(sizeof(struct charStack));
     myCharStack->string = " ";
     myCharStack->stringLen = 1;
-    myCharStack->ending = "";
-    myCharStack->endingLen = 0;
-    myCharStack->instances = -1;
+    myCharStack->isEnd = 1;
     myCharStack->next = myCharStack;
 
-    add(&myCharStack, "", 0, "\"", 1, 8);
+    add(&myCharStack, "", 0, 1);
     struct str * holder;
     for(int foo=0; foo<10; ++foo) {
-        printf("  (i=%d) left : %d", foo, myCharStack->instances);
+        printf("  (i=%d) left : %d", foo, myCharStack->isEnd);
         holder = consume(&myCharStack);
         printf("  \"");
         for(int i=0;i<holder->length;++i) {
