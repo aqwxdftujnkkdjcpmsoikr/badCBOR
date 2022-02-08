@@ -290,6 +290,7 @@ char * binToCBOR_S2S(unsigned char * inStream, int streamLen, char debugLevel) {
                     ++byteInd;
                     longInt = (longInt<<8) + (unsigned long int) inStream[byteInd];
                 }
+                longInt+=(type==1);
                 if(debugLevel>2) printf("      int is %lu (%d bytes long)\n", longInt, (1<<(len-24)));
                 for(char i=0; i<realLen;++i) {
                     // printf("      writing digit '%c'\n", ((char) 48+(longInt%(ipow(10,(realLen-i)))/ipow(10,(realLen-i-1))) ) );

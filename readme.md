@@ -9,7 +9,7 @@ Compile
 gcc -Wall -pedantic parse.c -o parse
 ```
 
-## Example
+## Examples
 
 Example input :
 ```
@@ -24,12 +24,12 @@ CBOR : <{"key" : 500, 2 : {3 : [4, 5, 6]}, "foo" : "bar", [7] : '0b01000001'}>
 
 Example input 2 (sequence of objects):
 ```
-./parse A4636B65791901F402A1038304050663666F6F63626172810741011010
+./parse A4636B65791901F402A1038304250663666F6F63626172810741011010
 ```
 
 Out should be :
 ```
-CBOR : <{"key" : 500, 2 : {3 : [4, 5, 6]}, "foo" : "bar", [7] : '0b01000001'}, 16, 16>
+CBOR : <{"key" : 500, 2 : {3 : [4, -5, 6]}, "foo" : "bar", [7] : '0b01000001'}, 16, 16>
 ```
 
 ## Flags
